@@ -97,7 +97,7 @@ const PRESET_COLORS: &[ColorU] = &[
 ];
 
 /// Helper struct containing participant info and anything else necessary for rendering
-/// for an present participant.
+/// for a present participant.
 #[derive(Clone)]
 pub struct Participant {
     pub info: ParticipantInfo,
@@ -333,11 +333,6 @@ impl PresenceManager {
     /// `None` if the viewer does not have a pending request.
     pub fn get_role_request(&self, participant_id: &ParticipantId) -> Option<&RoleRequestId> {
         self.role_requests.get(participant_id)
-    }
-
-    /// Returns the number of present viewers (not including ourselves).
-    pub(crate) fn present_viewer_count(&self) -> usize {
-        self.present_viewers.len()
     }
 
     /// Returns the present viewers of this shared session, not including ourselves.

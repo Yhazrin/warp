@@ -16,8 +16,8 @@ use anyhow::Context as _;
 use async_broadcast::InactiveReceiver;
 use std::any::Any;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::collections::HashSet;
+use std::rc::Rc;
 use std::sync::mpsc::{SendError, SyncSender};
 use std::{collections::HashMap, ffi::OsString, path::PathBuf, sync::Arc, thread::JoinHandle};
 
