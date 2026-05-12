@@ -224,6 +224,40 @@ impl Repository {
     }
 
     #[cfg(feature = "local_fs")]
+    pub(crate) fn update_tracked_remote_ref_and_notify_subscribers(
+        &mut self,
+        tracked_remote_ref: Option<TrackedRemoteRef>,
+        ctx: &mut ModelContext<Self>,
+    ) -> bool {
+        if !self.update_tracked_remote_ref(tracked_remote_ref) {
+            return false;
+        }
+
+        let subscriber_ids = self.get_subscriber_ids();
+        if subscriber_ids.is_empty() {
+            return true;
+        }
+
+        let repository_handle = ctx.handle();
+        let task_queue = self.task_queue.clone();
+        task_queue.update(ctx, |queue, ctx| {
+            for subscriber_id in subscriber_ids {
+                queue.enqueue_incremental_update(
+                    repository_handle.clone(),
+                    subscriber_id,
+                    RepositoryUpdate {
+                        remote_ref_updated: true,
+                        ..Default::default()
+                    },
+                    ctx,
+                );
+            }
+        });
+
+        true
+    }
+
+    #[cfg(feature = "local_fs")]
     fn path_for_comparison(path: &Path) -> PathBuf {
         dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
     }
@@ -247,6 +281,21 @@ impl Repository {
             Repository::resolve_tracked_remote_ref(root_dir),
             |repository, tracked_remote_ref, _ctx| {
                 repository.update_tracked_remote_ref(tracked_remote_ref);
+            },
+        );
+    }
+
+    #[cfg(feature = "local_fs")]
+    pub(crate) fn refresh_tracked_remote_ref_and_notify_subscribers(
+        &mut self,
+        ctx: &mut ModelContext<Self>,
+    ) {
+        let root_dir = self.root_dir().to_local_path_lossy();
+        ctx.spawn(
+            Repository::resolve_tracked_remote_ref(root_dir),
+            |repository, tracked_remote_ref, ctx| {
+                repository
+                    .update_tracked_remote_ref_and_notify_subscribers(tracked_remote_ref, ctx);
             },
         );
     }

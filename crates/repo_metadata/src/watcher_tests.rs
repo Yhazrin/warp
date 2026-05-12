@@ -515,6 +515,63 @@ fn test_common_config_routes_to_repos_sharing_common_git_dir() {
 }
 
 #[test]
+fn test_tracked_remote_ref_refresh_notifies_subscribers_when_cache_changes() {
+    VirtualFS::test("tracked_remote_ref_refresh_notifies", |dirs, mut vfs| {
+        stub_git_repository(&mut vfs, "repo");
+
+        let repo_path = dirs.tests().join("repo");
+
+        App::test((), |mut app| async move {
+            let watcher_handle = app.add_singleton_model(DirectoryWatcher::new);
+
+            let repo_handle = watcher_handle
+                .update(&mut app, |watcher, ctx| {
+                    watcher.add_directory(
+                        StandardizedPath::from_local_canonicalized(&repo_path).unwrap(),
+                        ctx,
+                    )
+                })
+                .unwrap();
+
+            let (scan_tx, mut scan_rx) = mpsc::unbounded::<()>();
+            let (update_tx, mut update_rx) = mpsc::unbounded::<RepositoryUpdate>();
+            let active_scans = Arc::new(AtomicUsize::new(0));
+
+            let subscriber =
+                TestSubscriber::new(scan_tx.clone(), update_tx.clone(), active_scans.clone());
+
+            let start = repo_handle.update(&mut app, |repo, ctx| {
+                repo.start_watching(Box::new(subscriber), ctx)
+            });
+            start
+                .registration_future
+                .await
+                .expect("Failed to add subscriber");
+
+            scan_rx.next().await.expect("Scan should complete");
+
+            repo_handle.update(&mut app, |repo, ctx| {
+                assert!(repo.update_tracked_remote_ref_and_notify_subscribers(
+                    TrackedRemoteRef::from_full_ref_name("refs/remotes/origin/main"),
+                    ctx,
+                ));
+            });
+
+            let update = update_rx.next().await.expect("Update should complete");
+            assert!(update.remote_ref_updated);
+            assert!(!update.commit_updated);
+            assert!(!update.index_lock_detected);
+            assert!(update.added.is_empty());
+            assert!(update.modified.is_empty());
+            assert!(update.deleted.is_empty());
+            assert!(update.moved.is_empty());
+
+            let queue = watcher_handle.read(&app, |watcher, _| watcher.processing_queue.clone());
+            wait_for_queue_complete(queue, &mut app).await;
+        });
+    });
+}
+#[test]
 #[ignore = "flaky test: CODE-1492"]
 fn test_commit_related_files_excluded_from_update_lists() {
     VirtualFS::test("commit_files_excluded", |dirs, mut vfs| {
