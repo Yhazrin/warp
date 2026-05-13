@@ -17,7 +17,7 @@ use pathfinder_color::ColorU;
 use std::borrow::Cow;
 use std::rc::Rc;
 use warp_core::ui::appearance::Appearance;
-use warp_core::ui::theme::color::internal_colors::neutral_2;
+use warp_core::ui::theme::color::internal_colors::neutral_1;
 use warpui::elements::Align;
 use warpui::elements::Clipped;
 use warpui::elements::FormattedTextElement;
@@ -102,7 +102,7 @@ impl RenderableAction {
             header: None,
             footer: None,
             action_button: None,
-            background_color: neutral_2(theme),
+            background_color: neutral_1(theme),
             should_highlight_border: false,
             should_override_with_content_item_spacing: false,
         }
@@ -117,7 +117,7 @@ impl RenderableAction {
             header: None,
             footer: None,
             action_button: None,
-            background_color: neutral_2(theme),
+            background_color: neutral_1(theme),
             should_highlight_border: false,
             should_override_with_content_item_spacing: false,
         }
@@ -132,7 +132,7 @@ impl RenderableAction {
             header: None,
             footer: None,
             action_button: None,
-            background_color: neutral_2(theme),
+            background_color: neutral_1(theme),
             should_highlight_border: false,
             should_override_with_content_item_spacing: false,
         }
@@ -213,21 +213,39 @@ impl RenderableAction {
             );
         }
 
-        let container = Container::new(content.finish())
-            .with_corner_radius(CornerRadius::with_all(Radius::Pixels(8.)))
-            .with_background_color(self.background_color)
-            .with_border(
-                Border::all(1.).with_border_fill(if self.should_highlight_border {
-                    theme.accent()
-                } else {
-                    theme.surface_2()
-                }),
-            );
+        // Flat style with left accent bar (Codex/Cursor aesthetic)
+        let accent_bar = Container::new(Empty::new().finish())
+            .with_width(2.)
+            .with_background(theme.accent().into_solid())
+            .finish();
 
-        if has_header || self.should_override_with_content_item_spacing {
-            container.finish().with_content_item_spacing()
+        let inner = Container::new(content.finish())
+            .with_corner_radius(CornerRadius::with_all(Radius::Pixels(8.)))
+            .with_background_color(self.background_color);
+
+        let highlighted = self.should_highlight_border;
+        let mut card_row = Flex::row()
+            .with_cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .with_child(accent_bar)
+            .with_child(Shrinkable::new(1., inner.finish()).finish());
+
+        if highlighted {
+            let container = Container::new(card_row.finish())
+                .with_corner_radius(CornerRadius::with_all(Radius::Pixels(8.)))
+                .with_border(Border::all(1.).with_border_fill(theme.accent()));
+            if has_header || self.should_override_with_content_item_spacing {
+                container.finish().with_content_item_spacing()
+            } else {
+                container.finish().with_agent_output_item_spacing(app)
+            }
         } else {
-            container.finish().with_agent_output_item_spacing(app)
+            let container = Container::new(card_row.finish())
+                .with_corner_radius(CornerRadius::with_all(Radius::Pixels(8.)));
+            if has_header || self.should_override_with_content_item_spacing {
+                container.finish().with_content_item_spacing()
+            } else {
+                container.finish().with_agent_output_item_spacing(app)
+            }
         }
     }
 }

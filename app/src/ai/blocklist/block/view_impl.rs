@@ -51,6 +51,7 @@ use crate::ai::agent::AIAgentInput;
 use crate::ai::blocklist::block::view_impl::header::{
     render_overflow_menu_button, OVERFLOW_BUTTON_SIZE,
 };
+use warp_core::ui::theme::color::internal_colors;
 use crate::ai::blocklist::inline_action::inline_action_icons::icon_size;
 use crate::ai::blocklist::model::AIBlockModelHelper;
 use crate::appearance::Appearance;
@@ -1082,11 +1083,9 @@ impl View for AIBlock {
             && !FeatureFlag::AgentView.is_enabled()
         {
             theme.restored_ai_blocks_overlay()
-        } else if should_use_transparent_overlay {
-            // Use a fully transparent background for universal developer input
-            Fill::Solid(ColorU::transparent_black())
         } else {
-            theme.ai_blocks_overlay()
+            // Flat style: transparent background for all blocks (Codex/Cursor aesthetic)
+            Fill::Solid(ColorU::transparent_black())
         };
 
         let mut content = Container::new(contents.finish()).with_background(background_color);
@@ -1107,7 +1106,7 @@ impl View for AIBlock {
         let should_render_separator =
             !FeatureFlag::AgentView.is_enabled() && contains_user_query_and_is_not_pin_to_top;
         if should_render_separator {
-            content = content.with_border(Border::top(1.).with_border_fill(theme.outline()));
+            content = content.with_border(Border::top(1.).with_border_fill(internal_colors::fg_overlay_1(theme)));
         }
 
         // Although `inputs_to_render` returns a vector, each AIBlock should only have one input.
@@ -1221,7 +1220,7 @@ impl View for AIBlock {
 ///
 /// Each sub-component of the AI block (header, query, output) is responsible for implementing its
 /// own padding and margin using these values.
-pub(crate) const CONTENT_HORIZONTAL_PADDING: f32 = 20.;
+pub(crate) const CONTENT_HORIZONTAL_PADDING: f32 = 24.;
 
 /// The vertical padding applied to the AIBlock's content.
 ///
@@ -1232,14 +1231,14 @@ pub(crate) const CONTENT_HORIZONTAL_PADDING: f32 = 20.;
 ///
 /// Each sub-component of the AI block (header, query, output) is responsible for implementing its
 /// own padding and margin using these values.
-pub(crate) const CONTENT_VERTICAL_PADDING: f32 = 16.;
+pub(crate) const CONTENT_VERTICAL_PADDING: f32 = 20.;
 
 /// The space in between each "item" in the AI block, e.g. between header, query, and each output
 /// "step".
 ///
 /// Each sub-component of the AI block (header, query, output) is responsible for implementing its
 /// own padding and margin using these values.
-pub(crate) const CONTENT_ITEM_VERTICAL_MARGIN: f32 = 16.;
+pub(crate) const CONTENT_ITEM_VERTICAL_MARGIN: f32 = 20.;
 
 pub(crate) trait WithContentItemSpacing {
     /// Returns a [`Container`] with standard margin and padding values applied to be rendered as a

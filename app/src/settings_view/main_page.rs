@@ -195,14 +195,28 @@ impl TypedActionView for MainSettingsPageView {
 
         match action {
             MainPageAction::Relaunch => {
-                autoupdate::initiate_relaunch_for_update(ctx);
+                if ChannelState::channel() == warp_core::channel::Channel::Oss {
+                    use crate::autoupdate::github_updater::GitHubUpdater;
+                    GitHubUpdater::handle(ctx).update(ctx, |updater, ctx| {
+                        updater.apply_and_relaunch(ctx);
+                    });
+                } else {
+                    autoupdate::initiate_relaunch_for_update(ctx);
+                }
             }
             MainPageAction::DownloadUpdate => {
                 autoupdate::manually_download_new_version(ctx);
             }
             MainPageAction::CheckForUpdate => {
-                ctx.emit(MainSettingsPageEvent::CheckForUpdate);
-                ctx.notify();
+                if ChannelState::channel() == warp_core::channel::Channel::Oss {
+                    use crate::autoupdate::github_updater::GitHubUpdater;
+                    GitHubUpdater::handle(ctx).update(ctx, |updater, ctx| {
+                        updater.manual_check(ctx);
+                    });
+                } else {
+                    ctx.emit(MainSettingsPageEvent::CheckForUpdate);
+                    ctx.notify();
+                }
             }
             MainPageAction::ToggleSettingsSync => {
                 let new_value =
@@ -262,6 +276,15 @@ impl MainSettingsPageView {
             &autoupdate_state_handle,
             Self::handle_autoupdate_state_change,
         );
+
+        // Observe GitHub updater for OSS channel.
+        if ChannelState::channel() == warp_core::channel::Channel::Oss {
+            use crate::autoupdate::github_updater::GitHubUpdater;
+            let github_handle = GitHubUpdater::handle(ctx);
+            ctx.observe(&github_handle, |_this, _event, ctx| {
+                ctx.notify();
+            });
+        }
 
         ctx.subscribe_to_model(&CloudPreferencesSettings::handle(ctx), |_, _, _, ctx| {
             ctx.notify();
@@ -832,7 +855,63 @@ impl VersionInfoWidget {
         }
 
         let (status_content, call_to_action_content) =
-            if ContextFlag::PromptForVersionUpdates.is_enabled() {
+            if ChannelState::channel() == warp_core::channel::Channel::Oss {
+                // Use GitHub-based updater for OSS channel.
+                use crate::autoupdate::github_updater::{GitHubUpdateStage, GitHubUpdater};
+                match GitHubUpdater::as_ref(app).stage() {
+                    GitHubUpdateStage::Idle | GitHubUpdateStage::Checking => (
+                        Some(StatusContent {
+                            text: "Checking for updates...",
+                            color: faded_text_color,
+                        }),
+                        None,
+                    ),
+                    GitHubUpdateStage::UpToDate { current_version } => (
+                        Some(StatusContent {
+                            text: "Up to date",
+                            color: faded_text_color,
+                        }),
+                        Some(CallToActionContent {
+                            text: "Check for updates",
+                            action: MainPageAction::CheckForUpdate,
+                        }),
+                    ),
+                    GitHubUpdateStage::Downloading { progress, .. } => (
+                        Some(StatusContent {
+                            text: "Downloading update...",
+                            color: faded_text_color,
+                        }),
+                        None,
+                    ),
+                    GitHubUpdateStage::UpdateReady { version, .. } => (
+                        Some(StatusContent {
+                            text: "Update available",
+                            color: ansi_red,
+                        }),
+                        Some(CallToActionContent {
+                            text: "Download & Restart",
+                            action: MainPageAction::Relaunch,
+                        }),
+                    ),
+                    GitHubUpdateStage::Applying { .. } => (
+                        Some(StatusContent {
+                            text: "Applying update...",
+                            color: faded_text_color,
+                        }),
+                        None,
+                    ),
+                    GitHubUpdateStage::Error(msg) => (
+                        Some(StatusContent {
+                            text: "Update check failed",
+                            color: ansi_red,
+                        }),
+                        Some(CallToActionContent {
+                            text: "Retry",
+                            action: MainPageAction::CheckForUpdate,
+                        }),
+                    ),
+                }
+            } else if ContextFlag::PromptForVersionUpdates.is_enabled() {
                 let ansi_red: ColorU = appearance.theme().terminal_colors().bright.red.into();
                 match autoupdate::get_update_state(app) {
                     AutoupdateStage::NoUpdateAvailable => (
