@@ -275,7 +275,7 @@ fn render_linked_code_block_internal(
 
     content.add_child(
         Container::new(header_row.finish())
-            .with_background(theme.surface_2())
+            .with_background(theme.surface_1())
             .with_vertical_padding(INLINE_ACTION_HEADER_VERTICAL_PADDING)
             .with_horizontal_padding(INLINE_ACTION_HORIZONTAL_PADDING)
             .with_corner_radius(CornerRadius::with_top(Radius::Pixels(
@@ -368,7 +368,7 @@ fn render_plain_code_block_internal(
 
     content.add_child(
         Container::new(code_element)
-            .with_background(theme.surface_2())
+            .with_background(theme.surface_1())
             .with_padding_top(INLINE_ACTION_HEADER_VERTICAL_PADDING)
             .with_padding_bottom(code_padding_bottom)
             .with_horizontal_padding(INLINE_ACTION_HORIZONTAL_PADDING)
@@ -385,7 +385,7 @@ fn render_plain_code_block_internal(
                 .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)
                 .finish(),
         )
-        .with_background(theme.surface_2())
+        .with_background(theme.surface_1())
         .with_padding_top(footer_padding_top)
         .with_padding_bottom(12.)
         .with_horizontal_padding(INLINE_ACTION_HORIZONTAL_PADDING)

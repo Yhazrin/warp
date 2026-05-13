@@ -193,7 +193,7 @@ impl HeaderConfig {
     ) -> Box<dyn Element> {
         let appearance = Appearance::as_ref(app);
         let theme = appearance.theme();
-        let header_background = theme.surface_2();
+        let header_background = theme.surface_1();
 
         let mut header_row = Flex::row()
             .with_main_axis_alignment(MainAxisAlignment::SpaceBetween)

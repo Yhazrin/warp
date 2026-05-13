@@ -1,5 +1,6 @@
 mod changelog;
 mod channel_versions;
+pub mod github_updater;
 #[cfg(target_os = "linux")]
 pub mod linux;
 #[cfg(target_os = "macos")]

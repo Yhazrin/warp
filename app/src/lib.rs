@@ -1313,6 +1313,9 @@ pub(crate) fn initialize_app(
         }
     }
 
+    // Clean up leftover .old files from GitHub updater.
+    autoupdate::github_updater::cleanup_old_executables();
+
     experiments::init(ctx);
 
     // Initialize timestamp for session id and last active event
@@ -1809,6 +1812,11 @@ pub(crate) fn initialize_app(
     }
 
     AutoupdateState::register(ctx, server_api.clone());
+
+    // Register GitHub-based updater for OSS channel.
+    if ChannelState::channel() == warp_core::channel::Channel::Oss {
+        autoupdate::github_updater::GitHubUpdater::register(ctx);
+    }
 
     ctx.add_singleton_model(LocalWorkflows::new);
 

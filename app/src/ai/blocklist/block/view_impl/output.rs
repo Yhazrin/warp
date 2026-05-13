@@ -3054,10 +3054,7 @@ fn render_response_footer(props: Props, app: &AppContext) -> Option<Box<dyn Elem
     // Show footer for any terminal state (complete, cancelled, or failed)
     let style_override = UiComponentStyles {
         font_color: Some(
-            appearance
-                .theme()
-                .sub_text_color(appearance.theme().background())
-                .into(),
+            blended_colors::text_disabled(appearance.theme(), appearance.theme().background()).into(),
         ),
         width: Some(icon_size(app) + 4.),
         height: Some(icon_size(app) + 4.),
@@ -3566,7 +3563,7 @@ fn render_collapsible_text_block_section(
 ) -> Box<dyn Element> {
     let appearance = Appearance::as_ref(app);
     let theme = appearance.theme();
-    let text_color = blended_colors::text_disabled(theme, theme.surface_2());
+    let text_color = blended_colors::text_sub(theme, theme.surface_1());
     let selectable = false;
     let is_streaming = props.model.status(app).is_streaming();
 
@@ -3649,7 +3646,23 @@ fn render_collapsible_text_block_section(
         container.add_child(Container::new(scrollable).with_margin_bottom(16.0).finish());
     }
 
-    container.finish()
+    // Wrap with left accent bar and subtle background (Codex/Cursor aesthetic)
+    let accent_bar = Container::new(Empty::new().finish())
+        .with_width(2.)
+        .with_background(theme.accent().into_solid())
+        .finish();
+
+    Flex::row()
+        .with_cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .with_child(accent_bar)
+        .with_child(
+            Container::new(container.finish())
+                .with_background(theme.surface_1())
+                .with_corner_radius(CornerRadius::with_all(Radius::Pixels(8.)))
+                .with_padding_left(12.)
+                .finish(),
+        )
+        .finish()
 }
 
 /// Renders collapsible debug output block.

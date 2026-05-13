@@ -90,7 +90,7 @@ pub(crate) fn render_query(
 
     let properties = Properties {
         style: Style::Normal,
-        weight: Weight::Bold,
+        weight: Weight::Normal,
     };
     // The query already includes the /plan prefix when in plan mode via display_user_query()
     let text_element = render_query_text(
