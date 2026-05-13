@@ -589,6 +589,10 @@ pub enum WorkspaceAction {
         select_first: bool,
     },
     ToggleAgentManagementView,
+    ToggleWebPreviewPanel,
+    WebPreviewNavigate {
+        url: String,
+    },
     ViewAgentRunsForEnvironment {
         environment_id: String,
     },
@@ -932,6 +936,8 @@ impl WorkspaceAction {
             | ToggleConversationListView
             | ToggleNotificationMailbox { .. }
             | ToggleAgentManagementView
+            | ToggleWebPreviewPanel
+            | WebPreviewNavigate { .. }
             | ViewAgentRunsForEnvironment { .. }
             | ToggleAIDocumentPane { .. }
             | HideAIDocumentPanes

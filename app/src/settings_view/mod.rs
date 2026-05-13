@@ -2431,7 +2431,7 @@ impl View for SettingsView {
         let row = Flex::row()
             .with_cross_axis_alignment(CrossAxisAlignment::Stretch)
             .with_main_axis_size(MainAxisSize::Max)
-            .with_child(Shrinkable::new(1., sidebar).finish())
+            .with_child(Shrinkable::new(0., sidebar).finish())
             .with_child(Shrinkable::new(1., page).finish())
             .finish();
 

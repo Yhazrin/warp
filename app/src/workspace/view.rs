@@ -13,6 +13,7 @@ pub(crate) mod openwarp_launch_modal;
 pub(crate) mod orchestration_launch_modal;
 pub(crate) mod right_panel;
 mod startup_directory;
+pub(crate) mod web_preview_panel;
 #[cfg(test)]
 #[path = "view_tests.rs"]
 mod tests;
@@ -119,6 +120,7 @@ use crate::workspace::view::left_panel::{
     LeftPanelAction, LeftPanelEvent, LeftPanelView, ToolPanelView,
 };
 use crate::workspace::view::right_panel::{RightPanelEvent, RightPanelView};
+use crate::workspace::view::web_preview_panel::WebPreviewPanelView;
 
 use crate::ui_components::window_focus_dimming::WindowFocusDimming;
 #[cfg(feature = "local_fs")]
@@ -1049,6 +1051,7 @@ pub struct Workspace {
     left_panel_view: ViewHandle<LeftPanelView>,
     left_panel_views: Vec<ToolPanelView>,
     right_panel_view: ViewHandle<RightPanelView>,
+    web_preview_panel_view: ViewHandle<WebPreviewPanelView>,
     working_directories_model: ModelHandle<pane_group::WorkingDirectoriesModel>,
     agent_management_view: ViewHandle<AgentManagementView>,
     notification_mailbox_view: Option<ViewHandle<NotificationMailboxView>>,
@@ -2777,6 +2780,9 @@ impl Workspace {
             me.handle_right_panel_event(event.clone(), ctx);
         });
 
+        let web_preview_panel_view =
+            ctx.add_typed_action_view(|ctx| WebPreviewPanelView::new(ctx));
+
         // Get persisted filters from window snapshot if restoring.
         let agent_management_filters = match workspace_setting {
             NewWorkspaceSource::Restored {
@@ -3179,6 +3185,7 @@ impl Workspace {
             left_panel_view,
             left_panel_views,
             right_panel_view,
+            web_preview_panel_view,
             working_directories_model,
             shown_staging_banner_count: 0,
 
@@ -12112,10 +12119,6 @@ impl Workspace {
             return ShowTabBar::Stacked;
         }
 
-        if !FeatureFlag::FullScreenZenMode.is_enabled() {
-            return ShowTabBar::default();
-        }
-
         let is_fullscreen = app
             .windows()
             .platform_window(self.window_id)
@@ -12167,11 +12170,10 @@ impl Workspace {
     #[cfg(target_os = "macos")]
     pub fn sync_window_button_visibility(&self, ctx: &mut ViewContext<Self>) {
         use warpui::platform::mac::WindowExt;
-        let show = if FeatureFlag::FullScreenZenMode.is_enabled()
-            && TabSettings::as_ref(ctx)
-                .workspace_decoration_visibility
-                .value()
-                == &WorkspaceDecorationVisibility::OnHover
+        let show = if TabSettings::as_ref(ctx)
+            .workspace_decoration_visibility
+            .value()
+            == &WorkspaceDecorationVisibility::OnHover
         {
             self.tab_bar_mode(ctx).has_tab_bar()
         } else {
@@ -17544,6 +17546,26 @@ impl Workspace {
         .finish()
     }
 
+    fn render_web_preview_button(
+        &self,
+        appearance: &Appearance,
+        ctx: &AppContext,
+    ) -> Box<dyn Element> {
+        let is_active = self.current_workspace_state.is_web_preview_panel_open;
+
+        self.render_tab_bar_icon_button(
+            appearance,
+            icons::Icon::Globe,
+            &self.mouse_states.web_preview,
+            WorkspaceAction::ToggleWebPreviewPanel,
+            "Web Preview".to_string(),
+            None,
+            is_active,
+            false,
+        )
+        .finish()
+    }
+
     /// Renders an invisible rect for detecting hovers over the tab bar.
     fn render_tab_bar_hover_area(&self) -> Box<dyn Element> {
         self.render_tab_bar_hoverable(
@@ -17988,6 +18010,9 @@ impl Workspace {
             HeaderToolbarItemKind::NotificationsMailbox => {
                 self.render_notifications_mailbox_button(appearance, ctx)
             }
+            HeaderToolbarItemKind::WebPreview => {
+                self.render_web_preview_button(appearance, ctx)
+            }
         };
         Some(
             Container::new(
@@ -18221,10 +18246,12 @@ impl Workspace {
         .with_height(TAB_BAR_HEIGHT)
         .finish();
 
-        let tab_bar_border =
-            Border::bottom(TAB_BAR_BORDER_HEIGHT).with_border_fill(appearance.theme().outline());
+        // Immersive tab bar: use a very subtle separator (fg_overlay_1 = 5% opacity)
+        // so the bar blends with the window background rather than creating a hard line.
+        let tab_bar_border = Border::bottom(TAB_BAR_BORDER_HEIGHT)
+            .with_border_fill(internal_colors::fg_overlay_1(appearance.theme()));
 
-        let mut tab_bar_container = Container::new(
+        let tab_bar_container = Container::new(
             EventHandler::new(Clipped::new(self.render_tab_bar_hoverable(bar_contents)).finish())
                 .on_back_mouse_down(move |ctx, _app, _position| {
                     ctx.dispatch_typed_action(WorkspaceAction::ActivatePrevTab);
@@ -18236,11 +18263,8 @@ impl Workspace {
                 })
                 .finish(),
         )
-        .with_border(tab_bar_border);
-        if FeatureFlag::NewTabStyling.is_enabled() {
-            tab_bar_container = tab_bar_container
-                .with_background(internal_colors::fg_overlay_1(appearance.theme()));
-        }
+        .with_border(tab_bar_border)
+        .with_background(internal_colors::fg_overlay_1(appearance.theme()));
         let tab_bar_element = tab_bar_container.finish();
 
         let dimming_color = appearance.theme().background().into();
@@ -18783,12 +18807,12 @@ impl Workspace {
         button = button
             .with_hovered_styles(UiComponentStyles {
                 font_color: Some(icon_color.into()),
-                background: Some(theme.surface_2().into()),
+                background: Some(internal_colors::fg_overlay_2(theme).into()),
                 ..UiComponentStyles::default()
             })
             .with_clicked_styles(UiComponentStyles {
                 font_color: Some(icon_color.into()),
-                background: Some(theme.background().into()),
+                background: Some(internal_colors::fg_overlay_3(theme).into()),
                 ..UiComponentStyles::default()
             });
 
@@ -19712,6 +19736,12 @@ impl Workspace {
             }
             HeaderToolbarItemKind::AgentManagement
             | HeaderToolbarItemKind::NotificationsMailbox => None,
+            HeaderToolbarItemKind::WebPreview => {
+                if !self.current_workspace_state.is_web_preview_panel_open {
+                    return None;
+                }
+                Some(ChildView::new(&self.web_preview_panel_view).finish())
+            }
         }
     }
 
@@ -21257,6 +21287,24 @@ impl TypedActionView for Workspace {
                     ),
                     ctx
                 );
+                ctx.notify();
+            }
+            ToggleWebPreviewPanel => {
+                let is_open = !self.current_workspace_state.is_web_preview_panel_open;
+                self.current_workspace_state.is_web_preview_panel_open = is_open;
+                if is_open {
+                    ctx.focus(&self.web_preview_panel_view);
+                } else {
+                    self.focus_active_tab(ctx);
+                }
+                ctx.notify();
+            }
+            WebPreviewNavigate { url } => {
+                self.current_workspace_state.is_web_preview_panel_open = true;
+                let url = url.clone();
+                self.web_preview_panel_view.update(ctx, |panel, ctx| {
+                    panel.navigate(url, ctx);
+                });
                 ctx.notify();
             }
             ToggleAgentManagementView => {

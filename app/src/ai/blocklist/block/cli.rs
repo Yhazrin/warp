@@ -30,8 +30,8 @@ use warpui::r#async::Timer;
 use warpui::{
     clipboard::ClipboardContent,
     elements::{
-        Border, ChildAnchor, ChildView, Container, CornerRadius, CrossAxisAlignment, DropShadow,
-        Expanded, Flex, MouseStateHandle, OffsetPositioning, ParentElement,
+        Border, ChildAnchor, ChildView, Container, CornerRadius, CrossAxisAlignment, Expanded,
+        Flex, MouseStateHandle, OffsetPositioning, ParentElement,
         PositionedElementAnchor, PositionedElementOffsetBounds, Radius, SelectionHandle,
         Shrinkable, Stack, Text,
     },
@@ -1738,8 +1738,7 @@ fn render_scrollable_container(props: ScrollableContainerProps, _app: &AppContex
         .with_background_color(background_color)
         .with_horizontal_padding(CONTENT_PADDING)
         .with_vertical_padding(CONTENT_PADDING)
-        .with_corner_radius(CornerRadius::with_all(Radius::Pixels(4.)))
-        .with_drop_shadow(DropShadow::default());
+        .with_corner_radius(CornerRadius::with_all(Radius::Pixels(4.)));
 
     if let Some(border) = border {
         container = container.with_border(border);
@@ -2117,11 +2116,7 @@ fn render_blocked_action(props: BlockedActionProps<'_>, app: &AppContext) -> Box
         .finish();
 
     let mut stack = Stack::new();
-    stack.add_child(
-        Container::new(body)
-            .with_drop_shadow(DropShadow::default())
-            .finish(),
-    );
+    stack.add_child(Container::new(body).finish());
 
     if props.is_allow_menu_open {
         if let Some(allow_menu) = props.allow_menu {

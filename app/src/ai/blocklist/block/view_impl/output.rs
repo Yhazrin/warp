@@ -35,7 +35,8 @@ use crate::AIAgentTodoList;
 use std::path::{Component, Path, PathBuf};
 
 use ai::agent::action::{
-    RequestComputerUseRequest, SuggestPromptRequest, UploadArtifactRequest, UseComputerRequest,
+    FileEdit, RequestComputerUseRequest, SuggestPromptRequest, UploadArtifactRequest,
+    UseComputerRequest,
 };
 use ai::skills::SkillReference;
 use pathfinder_color::ColorU;
@@ -1092,6 +1093,14 @@ pub(super) fn render(props: Props, app: &AppContext) -> Box<dyn Element> {
                         render_references_footer(&output.citations, props, app)
                     {
                         output_items.add_child(references);
+                    }
+                }
+
+                if is_complete {
+                    if let Some(files_summary) =
+                        render_touched_files_summary(&output.messages, app)
+                    {
+                        output_items.add_child(files_summary);
                     }
                 }
 
@@ -3842,6 +3851,192 @@ fn format_conversation_search_phase(phase: &ConversationSearchPhase) -> String {
             format!("Reading {count} messages")
         }
     }
+}
+
+/// Collects every file path that was created, edited, deleted, or uploaded during
+/// this conversation turn, deduplicates them, and renders a flat horizontal row
+/// of rounded-rect file cards — one per file — at the bottom of the output.
+///
+/// Returns `None` when no files were touched.
+fn render_touched_files_summary(
+    messages: &[crate::ai::agent::AIAgentOutputMessage],
+    app: &AppContext,
+) -> Option<Box<dyn Element>> {
+    use std::collections::HashSet;
+
+    struct TouchedFile {
+        path: String,
+        op: &'static str,
+    }
+
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut files: Vec<TouchedFile> = Vec::new();
+
+    for msg in messages {
+        match &msg.message {
+            AIAgentOutputMessageType::Action(crate::ai::agent::AIAgentAction {
+                action: AIAgentActionType::RequestFileEdits { file_edits, .. },
+                ..
+            }) => {
+                for edit in file_edits {
+                    let op = match edit {
+                        FileEdit::Create { .. } => "created",
+                        FileEdit::Delete { .. } => "deleted",
+                        FileEdit::Edit(_) => "edited",
+                    };
+                    if let Some(path) = edit.file() {
+                        if seen.insert(path.to_string()) {
+                            files.push(TouchedFile {
+                                path: path.to_string(),
+                                op,
+                            });
+                        }
+                    }
+                }
+            }
+            AIAgentOutputMessageType::Action(crate::ai::agent::AIAgentAction {
+                action: AIAgentActionType::UploadArtifact(UploadArtifactRequest { file_path, .. }),
+                ..
+            }) => {
+                if seen.insert(file_path.clone()) {
+                    files.push(TouchedFile {
+                        path: file_path.clone(),
+                        op: "uploaded",
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if files.is_empty() {
+        return None;
+    }
+
+    let appearance = Appearance::as_ref(app);
+    let theme = appearance.theme();
+    let font_family = appearance.ui_font_family();
+    let font_size = appearance.monospace_font_size() - 1.;
+    let label_color = theme.nonactive_ui_text_color();
+    let text_color = theme.active_ui_text_color();
+    let card_bg = theme.surface_1();
+    let card_border_fill = theme.outline();
+
+    let section_label = Text::new_inline("Files changed", font_family, font_size)
+        .with_color(label_color.into())
+        .with_selectable(false);
+
+    let mut cards_row = Flex::row().with_cross_axis_alignment(CrossAxisAlignment::Start);
+
+    for file in &files {
+        let basename = Path::new(&file.path)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or(&file.path);
+        let display_name = truncate_from_end(basename, 28);
+        let op = file.op;
+
+        let build_card = move |display_name: &str,
+                               op: &str,
+                               font_family,
+                               font_size: f32,
+                               label_color: Fill,
+                               text_color: Fill,
+                               card_bg: Fill,
+                               card_border_fill: Fill| {
+            let file_icon = ConstrainedBox::new(
+                Icon::File.to_warpui_icon(label_color).finish(),
+            )
+            .with_width(12.)
+            .with_height(12.)
+            .finish();
+
+            let name_text = Text::new_inline(display_name, font_family, font_size)
+                .with_color(text_color.into())
+                .with_selectable(false);
+
+            let op_text = Text::new_inline(op, font_family, font_size - 1.)
+                .with_color(label_color.into())
+                .with_selectable(false);
+
+            let card_inner = Flex::column()
+                .with_child(
+                    Flex::row()
+                        .with_child(Container::new(file_icon).with_margin_right(4.).finish())
+                        .with_child(name_text.finish())
+                        .finish(),
+                )
+                .with_child(Container::new(op_text.finish()).with_margin_top(2.).finish())
+                .finish();
+
+            Container::new(card_inner)
+                .with_uniform_padding(8.)
+                .with_background(card_bg)
+                .with_border(Border::all(1.).with_border_fill(card_border_fill))
+                .with_corner_radius(CornerRadius::with_all(Radius::Rounded(6.)))
+                .finish()
+        };
+
+        #[cfg(feature = "local_fs")]
+        let card: Box<dyn Element> = {
+            use std::sync::Mutex;
+            use warpui::elements::MouseState;
+            let path_clone = file.path.clone();
+            let display_name_owned = display_name.to_string();
+            let handle = Arc::new(Mutex::new(MouseState::default()));
+            Hoverable::new(handle, move |_mouse_state| {
+                build_card(
+                    &display_name_owned,
+                    op,
+                    font_family,
+                    font_size,
+                    label_color,
+                    text_color,
+                    card_bg,
+                    card_border_fill,
+                )
+            })
+            .on_click(move |ctx, _, _| {
+                ctx.dispatch_typed_action(AIBlockAction::OpenCodeInWarp {
+                    source: CodeSource::Link {
+                        path: PathBuf::from(&path_clone),
+                        range_start: None,
+                        range_end: None,
+                    },
+                })
+            })
+            .with_cursor(Cursor::PointingHand)
+            .finish()
+        };
+        #[cfg(not(feature = "local_fs"))]
+        let card: Box<dyn Element> = build_card(
+            &display_name,
+            op,
+            font_family,
+            font_size,
+            label_color,
+            text_color,
+            card_bg,
+            card_border_fill,
+        );
+
+        cards_row.add_child(
+            Container::new(card)
+                .with_margin_right(8.)
+                .with_margin_bottom(4.)
+                .finish(),
+        );
+    }
+
+    let mut column = Flex::column();
+    column.add_child(
+        Container::new(section_label.finish())
+            .with_margin_bottom(8.)
+            .finish(),
+    );
+    column.add_child(cards_row.finish());
+
+    Some(column.finish().with_agent_output_item_spacing(app).finish())
 }
 
 #[cfg(test)]
